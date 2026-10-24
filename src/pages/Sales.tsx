@@ -111,7 +111,13 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
           variant_id: p.id,
           unit_id: u?.id,
           quantity: 1,
-          price: purchase ? 0 : p.price,
+          price: purchase
+            ? 0
+            : ((useGrant
+                ? grant!.lines.find(
+                    (l) => l.variant_id === p.id && (!u || l.unit_id === u.id),
+                  )?.price
+                : undefined) ?? p.price),
           discount: 0,
           identifier: u?.identifier,
           ...details,
@@ -283,7 +289,14 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
                 <strong>{p.name}</strong>
                 <span>{[p.capacity, p.color].filter(Boolean).join(" · ")}</span>
                 <div className="product-bottom">
-                  <b>{money(p.price)}</b>
+                  <b>
+                    {money(
+                      useGrant
+                        ? (grant!.lines.find((l) => l.variant_id === p.id)
+                            ?.price ?? p.price)
+                        : p.price,
+                    )}
+                  </b>
                   <small className={available(p) ? "" : "danger-text"}>
                     Còn {available(p)}
                   </small>
