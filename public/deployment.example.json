@@ -1,0 +1,5 @@
+{
+  "customer": "Tên khách hàng / cửa hàng",
+  "url": "https://PROJECT_REF.supabase.co",
+  "publishableKey": "Thay bằng publishable key hoặc legacy anon key của riêng khách này"
+}
