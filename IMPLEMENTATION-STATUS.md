@@ -32,7 +32,7 @@ So với mô hình logic trong PLAN, database gộp các đầu chứng từ và
 ## Chưa nghiệm thu / cần hoàn thiện trước vận hành
 
 - Chưa cấu hình Supabase thật: cần chạy SQL, Auth, SMTP/redirect, chủ/nhân viên; kiểm tra RPC/RLS bằng JWT thật trên project thử rồi mới dùng project vận hành.
-- Chưa chạy trọn ma trận `../docs/07-TEST-PLAN.md`, kiểm thử hai kết nối PostgreSQL thật đồng thời, dữ liệu dung lượng mục tiêu hoặc hiệu năng trên máy cấu hình thấp.
+- Chưa chạy trọn ma trận `docs/07-TEST-PLAN.md`, kiểm thử hai kết nối PostgreSQL thật đồng thời, dữ liệu dung lượng mục tiêu hoặc hiệu năng trên máy cấu hình thấp.
 - Chưa xác minh in trên máy in giấy thật, khổ giấy/lề/cắt giấy. Hỗ trợ hộp thoại in trình duyệt; không có driver in thẳng.
 - Đã sửa khởi tạo SW sau top-level await và cache miss do `Vary: Origin`. Sau sửa, đã dừng máy chủ local, reload được giao diện từ cache và lưu phiếu quầy thứ hai. Đây là kiểm tra shell + IndexedDB demo; vẫn cần thử mất Internet/khởi động lại và đồng bộ Supabase thật trên Chrome/Edge của máy quầy.
 - Chưa có nhập bản sao quầy tự động, quy trình xử lý mất máy/clone browser, grant có chữ ký và ràng buộc phần cứng. Cần quy trình đối soát ngoại lệ và diễn tập khôi phục cả database/Auth trước go-live.

@@ -4,7 +4,7 @@ PWA tiếng Việt quản lý một cửa hàng điện thoại/phụ kiện, m�
 
 ## Chạy trên máy phát triển
 
-Cần Node.js 24 và npm. Tại thư mục `app`:
+Cần Node.js 24 và npm. Chạy tại thư mục chứa `package.json` (thư mục `app` trong workspace ban đầu, hoặc thư mục gốc sau khi clone repository GitHub):
 
 ```powershell
 npm ci
@@ -62,6 +62,6 @@ Hạn mức không tự hết hạn/thu hồi khi máy mất liên lạc. Bản 
 
 ## Kiểm tra trước khi nhận dữ liệu thật
 
-Xem [IMPLEMENTATION-STATUS.md](IMPLEMENTATION-STATUS.md) và bộ kế hoạch `../docs/`. Đã có kiểm thử SQL trên PostgreSQL nhúng, tiền, quyền và IndexedDB; chưa thay thế kiểm thử Supabase thật, mạng đứt trên máy quầy, máy in thật, tải thực tế và diễn tập backup/restore. Không tuyên bố bản này đã nghiệm thu toàn bộ PLAN.
+Xem [IMPLEMENTATION-STATUS.md](IMPLEMENTATION-STATUS.md), [PLAN.md](PLAN.md) và bộ kế hoạch trong [docs/](docs/). Đã có kiểm thử SQL trên PostgreSQL nhúng, tiền, quyền và IndexedDB; chưa thay thế kiểm thử Supabase thật, mạng đứt trên máy quầy, máy in thật, tải thực tế và diễn tập backup/restore. Không tuyên bố bản này đã nghiệm thu toàn bộ PLAN.
 
 Hosting cần phục vụ ứng dụng tại `/`, HTTPS, đúng MIME JS/CSS/manifest và không cache lâu `deployment.json`, `index.html`, `sw.js`. Các asset có hash có thể cache lâu. Nếu nền tảng không áp dụng `public/_headers`, hãy cấu hình header tương đương ở hosting. Service worker chỉ cache shell/asset tĩnh, không cache phản hồi Auth/RPC. Dữ liệu làm việc/offline nằm trong IndexedDB tách theo project/cửa hàng/user.

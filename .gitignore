@@ -6,3 +6,4 @@ dist/
 .sites-runtime/
 *.tsbuildinfo
 coverage/
+public/deployment.json
