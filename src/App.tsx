@@ -324,7 +324,7 @@ export default function App() {
   if (loading)
     return (
       <div className="loading-screen">
-        <img src="/icon.svg" alt="MobiDesk" />
+        <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="MobiDesk" />
         <h2>MobiDesk</h2>
         <span>Đang chuẩn bị cửa hàng…</span>
         <i className="loader" />
@@ -381,7 +381,7 @@ export default function App() {
             href="#dashboard"
             onClick={() => navigate("dashboard")}
           >
-            <img src="/icon.svg" alt="" />
+            <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" />
             <div>
               <strong>
                 MobiDesk<span>®</span>
@@ -687,7 +687,7 @@ function Login({
     <div className="login-layout">
       <div className="login-story">
         <a className="brand" href="#">
-          <img src="/icon.svg" alt="" />
+          <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" />
           <strong>MobiDesk</strong>
         </a>
         <div>

@@ -35,7 +35,7 @@ export function startPwa() {
   });
   // Register immediately: configuration uses top-level await, so window.load may already have fired.
   void navigator.serviceWorker
-    .register("/sw.js")
+    .register(`${import.meta.env.BASE_URL}sw.js`)
     .then(async (registration) => {
       await navigator.serviceWorker.ready;
       if (navigator.serviceWorker.controller)

@@ -1,16 +1,16 @@
 {
-  "id": "/",
+  "id": "./",
   "name": "MobiDesk — Quản lý cửa hàng",
   "short_name": "MobiDesk",
   "lang": "vi",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#f6f7f9",
   "theme_color": "#176947",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"

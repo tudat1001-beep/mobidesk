@@ -61,7 +61,7 @@ export default function Setup() {
   return (
     <div className="setup-page">
       <a className="brand" href="#dashboard">
-        <img src="/icon.svg" alt="" />
+        <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" />
         <strong>MobiDesk</strong>
       </a>
       <section className="panel setup-panel">
@@ -185,7 +185,11 @@ export default function Setup() {
               trước khi kiểm tra kết nối. Bộ SQL chỉ dành cho project trống,
               chưa chạy tự động từ trình duyệt.
             </div>
-            <a className="text-btn" href="/supabase-setup.sql" download>
+            <a
+              className="text-btn"
+              href={`${import.meta.env.BASE_URL}supabase-setup.sql`}
+              download
+            >
               <Download size={15} />
               Tải SQL khởi tạo Supabase
             </a>

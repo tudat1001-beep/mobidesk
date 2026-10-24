@@ -101,7 +101,7 @@ async function load() {
   }
   if (navigator.onLine) {
     try {
-      const r = await fetch("/deployment.json", {
+      const r = await fetch(`${import.meta.env.BASE_URL}deployment.json`, {
         cache: "no-store",
         signal: AbortSignal.timeout(4000),
       });

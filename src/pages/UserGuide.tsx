@@ -19,7 +19,7 @@ export default function UserGuide({ onBack }: { onBack: () => void }) {
     <div className="guide-page">
       <header className="guide-header">
         <a className="brand" href="#dashboard">
-          <img src="/icon.svg" alt="" />
+          <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" />
           <strong>MobiDesk</strong>
         </a>
         <button className="btn secondary" onClick={onBack}>
@@ -34,7 +34,11 @@ export default function UserGuide({ onBack }: { onBack: () => void }) {
           </span>
           <h1>{guide.title}</h1>
           <p>{guide.intro}</p>
-          <a className="btn secondary" href="/huong-dan-su-dung.md" download>
+          <a
+            className="btn secondary"
+            href={`${import.meta.env.BASE_URL}huong-dan-su-dung.md`}
+            download
+          >
             <Download size={17} />
             Tải hướng dẫn Markdown
           </a>
