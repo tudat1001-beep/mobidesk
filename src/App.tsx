@@ -23,6 +23,7 @@ import {
   Wallet,
   WifiOff,
   X,
+  BookOpen,
 } from "lucide-react";
 import type { Snapshot, OfflineReceipt, Grant, Command } from "./domain/types";
 import { AppContext } from "./lib/context";
@@ -55,6 +56,7 @@ import {
 import Offline from "./pages/Offline";
 import Dialogs from "./components/Dialogs";
 import Setup from "./components/Setup";
+import UserGuide from "./pages/UserGuide";
 import { installation } from "./lib/configuration";
 import { Button, Field } from "./components/ui";
 
@@ -72,6 +74,7 @@ const secondary = [
   ["warranty", "Bảo hành", ShieldCheck],
   ["offline", "Quầy offline", Cloud],
   ["settings", "Cài đặt", Settings],
+  ["guide", "Hướng dẫn sử dụng", BookOpen],
 ] as const;
 export default function App() {
   const [demo, setDemo] = useState(!configured),
@@ -316,6 +319,8 @@ export default function App() {
   const currentLabel =
     [...navigation, ...secondary].find(([k]) => k === page)?.[1] || "Tổng quan";
   if (page === "thiet-lap") return <Setup />;
+  if (page === "guide")
+    return <UserGuide onBack={() => navigate("dashboard")} />;
   if (loading)
     return (
       <div className="loading-screen">
@@ -827,6 +832,10 @@ function Login({
             Để tạo tài khoản, chủ cửa hàng mời người dùng qua Supabase
             Authentication.
           </small>
+          <a className="text-btn" href="#guide">
+            <BookOpen size={16} />
+            Đọc hướng dẫn sử dụng
+          </a>
         </div>
       </div>
     </div>

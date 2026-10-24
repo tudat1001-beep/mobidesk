@@ -1,5 +1,7 @@
 # Trạng thái triển khai — 24/10/2026
 
+Đã bổ sung **Hướng dẫn sử dụng** trong menu và tại `/#guide`: 19 mục nghiệp vụ, tìm kiếm không dấu, mục lục cho phone, ví dụ tiền/công nợ và hướng xử lý lỗi. Bản `docs/HUONG-DAN-SU-DUNG.md` và tệp tải trên web được build từ cùng nội dung `src/content/user-guide.json`. Đã kiểm tra mở từ menu, tìm kiếm, chuyển mục trên phone và tải Markdown; hai bản Markdown có cùng hash. Thanh bên hỗ trợ cuộn khi danh sách công cụ dài trên màn thấp.
+
 Người dùng đã yêu cầu triển khai và xác nhận **mỗi khách một bản cài, cấu hình Supabase ẩn riêng**. Đây là bản chạy thử để kiểm tra và chuẩn bị nối project riêng; chưa có Supabase project thật được cung cấp hoặc áp dụng SQL.
 
 ## Đã có trong mã nguồn

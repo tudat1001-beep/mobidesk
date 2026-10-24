@@ -5,6 +5,7 @@ const assets = [
   "/index.html",
   "/icon.svg",
   "/manifest.webmanifest",
+  "/huong-dan-su-dung.md",
   ...(await readdir("dist/assets"))
     .filter((f) => /\.(js|css)$/.test(f))
     .map((f) => `/assets/${f}`),
@@ -14,6 +15,27 @@ const version = createHash("sha256")
   .update(await readFile(new URL(import.meta.url)))
   .digest("hex")
   .slice(0, 12);
+const guide = JSON.parse(await readFile("src/content/user-guide.json", "utf8"));
+if (
+  !guide.sections.length ||
+  new Set(guide.sections.map((s) => s.id)).size !== guide.sections.length ||
+  guide.sections.some(
+    (s) => !/^[a-z0-9-]+$/.test(s.id) || !s.title || !s.steps.length,
+  )
+)
+  throw new Error("Hướng dẫn cần mã mục duy nhất, tiêu đề và các bước đầy đủ.");
+const markdown =
+  `# ${guide.title}\n\nCập nhật: ${guide.version}\n\n${guide.intro}\n\n## Mục lục\n\n` +
+  guide.sections.map((s) => `- [${s.title}](#${s.id})`).join("\n") +
+  "\n\n" +
+  guide.sections
+    .map(
+      (s) =>
+        `<a name="${s.id}"></a>\n\n## ${s.title}\n\n${s.intro}\n\n${s.steps.map((step, i) => `${i + 1}. ${step}`).join("\n\n")}\n\n${s.example ? `> ${s.example}\n\n` : ""}### Cần nhớ\n\n${s.notes.map((note) => `- ${note}`).join("\n\n")}\n`,
+    )
+    .join("\n");
+await writeFile("dist/huong-dan-su-dung.md", markdown);
+await writeFile("docs/HUONG-DAN-SU-DUNG.md", markdown);
 await writeFile(
   "dist/sw.js",
   `const NAME='mobidesk-${version}';const FILES=${JSON.stringify(assets)};

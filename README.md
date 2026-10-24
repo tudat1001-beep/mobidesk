@@ -2,6 +2,10 @@
 
 PWA tiếng Việt quản lý một cửa hàng điện thoại/phụ kiện, một kho, một máy quầy offline. Mỗi khách dùng một bản cài và một Supabase project riêng. Chưa nhập cấu hình thì ứng dụng mở dữ liệu minh họa, lưu riêng trên máy; dữ liệu minh họa không được chuyển thành sổ thật.
 
+## Hướng dẫn cho người sử dụng
+
+Đọc [hướng dẫn sử dụng chi tiết](docs/HUONG-DAN-SU-DUNG.md), hoặc mở mục **Hướng dẫn sử dụng** trong ứng dụng (`/#guide`). Hướng dẫn gồm 19 mục, có tìm kiếm không dấu, ví dụ thanh toán/công nợ, quy trình offline và xử lý lỗi. Bản web có nút tải Markdown. Nội dung nguồn nằm ở `src/content/user-guide.json`; `npm run build` đồng thời tạo bản Markdown trong `docs/` và `dist/` để hai bản luôn cùng nội dung.
+
 ## Chạy trên máy phát triển
 
 Cần Node.js 24 và npm. Chạy tại thư mục chứa `package.json` (thư mục `app` trong workspace ban đầu, hoặc thư mục gốc sau khi clone repository GitHub):
