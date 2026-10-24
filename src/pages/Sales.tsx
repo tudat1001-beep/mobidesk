@@ -1,18 +1,26 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Minus,
   Plus,
-  Printer,
   Search,
   ShoppingBag,
   Trash2,
   WifiOff,
+  ArrowRight,
+  Users,
 } from "lucide-react";
 import type { CartLine, Product, Unit } from "../domain/types";
-import { cartTotal, money, normalize } from "../domain/money";
+import { cartTotal, integer, isImei, money, normalize } from "../domain/money";
 import { useApp } from "../lib/context";
-import { getLocal, recordOffline, scopeKey } from "../lib/storage";
+import { recordOffline, scopeKey } from "../lib/storage";
+import { MoneyInput } from "../components/MoneyInput";
+import {
+  paymentAmounts,
+  matchesParty,
+  readSalesDraft,
+  type PaymentMethod,
+} from "../lib/pos";
 import {
   Badge,
   Button,
@@ -27,43 +35,171 @@ import {
 export default function Sales({ purchase = false }: { purchase?: boolean }) {
   const a = useApp(),
     { data: s, online } = a,
+    draftKey = `pos-draft:${scopeKey(a.demo, s.store.id, s.user_id)}:${purchase ? "purchase" : "sale"}`,
+    [initial] = useState(() => readSalesDraft(sessionStorage, draftKey)),
     [query, setQuery] = useState(""),
     [category, setCategory] = useState("Tất cả"),
-    [cart, setCart] = useState<CartLine[]>([]),
+    [cart, setCart] = useState<CartLine[]>(initial.cart),
     [pick, setPick] = useState<Product | null>(null),
-    [party, setParty] = useState(""),
-    [discount, setDiscount] = useState(0),
-    [cash, setCash] = useState(""),
-    [bank, setBank] = useState("0"),
-    [freight, setFreight] = useState(0),
-    [note, setNote] = useState(""),
+    [party, setParty] = useState(initial.party),
+    [discount, setDiscount] = useState(initial.discount),
+    [cash, setCash] = useState(initial.cash),
+    [bank, setBank] = useState(initial.bank),
+    [freight, setFreight] = useState(initial.freight),
+    [note, setNote] = useState(initial.note),
     [saving, setSaving] = useState(false),
-    [cashOnly, setCashOnly] = useState(false);
+    [method, setMethod] = useState<PaymentMethod>(initial.method),
+    [mobileStep, setMobileStep] = useState<"catalog" | "checkout">("catalog"),
+    [partyPicker, setPartyPicker] = useState(false),
+    [partyQuery, setPartyQuery] = useState(""),
+    [draftSaved, setDraftSaved] = useState(true),
+    [restored, setRestored] = useState(initial.cart.length > 0),
+    [entryError, setEntryError] = useState(""),
+    [purchaseCost, setPurchaseCost] = useState(0);
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (
+      ![
+        discount,
+        freight,
+        Number(cash),
+        Number(bank),
+        ...cart.flatMap((l) => [l.price, l.quantity, l.discount]),
+      ].every(Number.isFinite) ||
+      cart.some((l) => l.quantity < 1)
+    )
+      return;
+    try {
+      sessionStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          cart,
+          party,
+          discount,
+          cash,
+          bank,
+          freight,
+          note,
+          method,
+        }),
+      );
+      setDraftSaved(true);
+    } catch {
+      setDraftSaved(false);
+    }
+  }, [draftKey, cart, party, discount, cash, bank, freight, note, method]);
   const grant = s.grants.find(
       (g) =>
         g.status === "ACTIVE" &&
         g.terminal_id === a.terminal &&
         g.user_id === s.user_id,
     ),
-    useGrant = !purchase && !!grant,
-    offline = !online || cashOnly;
-  const amount = useMemo(() => {
+    useGrant = !purchase && !!grant;
+  const totals = useMemo(() => {
       try {
-        return cartTotal(cart, discount).total;
-      } catch {
-        return 0;
+        return { amount: cartTotal(cart, discount).total, error: "" };
+      } catch (e) {
+        return { amount: 0, error: (e as Error).message };
       }
     }, [cart, discount]),
-    cashPaid = cash === "" ? amount : Number(cash),
-    bankPaid = Number(bank) || 0;
+    amount = totals.amount,
+    { cashPaid, bankPaid } = paymentAmounts(
+      useGrant ? "CASH" : method,
+      amount,
+      cash,
+      bank,
+    ),
+    count = cart.reduce((n, l) => n + l.quantity, 0),
+    selectedParty = s.parties.find((p) => p.id === party),
+    partyOptions = s.parties.filter(
+      (p) =>
+        (purchase ? p.type !== "CUSTOMER" : p.type !== "SUPPLIER") &&
+        matchesParty(p, partyQuery),
+    ),
+    paymentError =
+      totals.error ||
+      (![cashPaid, bankPaid, freight].every(
+        (v) => Number.isSafeInteger(v) && v >= 0 && v <= 1e12,
+      )
+        ? "Kiểm tra lại số tiền đã nhập."
+        : !useGrant && cashPaid + bankPaid > amount
+          ? "Tổng thanh toán vượt tiền hàng. Kiểm tra lại tiền mặt và chuyển khoản."
+          : !party && (purchase || cashPaid + bankPaid < amount)
+            ? purchase
+              ? "Chọn nhà cung cấp trước khi ghi nhận."
+              : "Chọn khách hàng để ghi nhận phần còn nợ."
+            : "");
+  function review(step: "catalog" | "checkout") {
+    setMobileStep(step);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function chooseMethod(next: PaymentMethod) {
+    setMethod(next);
+    setCash(next === "BANK" || next === "CREDIT" ? "0" : "");
+    setBank(next === "BANK" ? "" : "0");
+  }
+  function openProduct(p: Product) {
+    if (
+      !purchase &&
+      (!available(p) ||
+        (p.mode !== "QUANTITY" &&
+          !s.units.some(
+            (u) =>
+              u.variant_id === p.id &&
+              selectable(u) &&
+              !cart.some((l) => l.unit_id === u.id),
+          )))
+    ) {
+      a.notify("Đã chọn hết hoặc sản phẩm không còn tồn được phép bán.", true);
+      return;
+    }
+    setEntryError("");
+    setPurchaseCost(0);
+    if (p.mode === "QUANTITY") add(p);
+    else setPick(p);
+  }
+  function selectable(u: Unit) {
+    return (
+      u.status === (useGrant ? "OFFLINE_RESERVED" : "AVAILABLE") &&
+      (!useGrant ||
+        (grant!.lines.some((l) => l.unit_id === u.id) &&
+          !a.outbox.some(
+            (r) =>
+              r.grant_id === grant!.id &&
+              r.sequence > grant!.last_sequence &&
+              r.lines.some((l) => l.unit_id === u.id),
+          )))
+    );
+  }
   const products = s.products.filter(
     (p) =>
       !p.archived &&
       (category === "Tất cả" || p.category === category) &&
-      normalize(
+      (normalize(
         `${p.name} ${p.sku} ${p.barcode || ""} ${p.brand} ${p.color}`,
-      ).includes(normalize(query)),
+      ).includes(normalize(query)) ||
+        s.units.some(
+          (u) =>
+            u.variant_id === p.id &&
+            normalize(`${u.identifier} ${u.imei2}`).includes(normalize(query)),
+        )),
   );
+  useEffect(() => {
+    if (useGrant) {
+      chooseMethod("CASH");
+      setParty("");
+    }
+  }, [grant?.id, useGrant]);
+  function quantityAt(index: number, quantity: number) {
+    const line = cart[index],
+      p = s.products.find((p) => p.id === line.variant_id)!;
+    if (!Number.isSafeInteger(quantity) || quantity < 0) return;
+    if (!purchase && quantity > available(p)) {
+      a.notify(`Chỉ còn ${available(p)} sản phẩm có thể bán.`, true);
+      return;
+    }
+    setCart(cart.map((l, i) => (i === index ? { ...l, quantity } : l)));
+  }
   function available(p: Product) {
     if (useGrant) {
       const ls = grant!.lines.filter((l) => l.variant_id === p.id),
@@ -86,6 +222,10 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
           .length;
   }
   function add(p: Product, u?: Unit, details?: Partial<CartLine>) {
+    if (!purchase && u && !selectable(u)) {
+      a.notify("IMEI / Serial này không còn trong tồn được phép bán.", true);
+      return;
+    }
     if (!purchase && !available(p)) {
       a.notify("Sản phẩm chưa có tồn bán được.", true);
       return;
@@ -99,6 +239,10 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
       return;
     }
     if (p.mode === "QUANTITY" && key >= 0) {
+      if (!purchase && cart[key].quantity >= available(p)) {
+        a.notify(`Đã chọn hết ${available(p)} sản phẩm có thể bán.`, true);
+        return;
+      }
       setCart(
         cart.map((l, i) =>
           i === key ? { ...l, quantity: l.quantity + 1 } : l,
@@ -124,12 +268,27 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
         },
       ]);
     setPick(null);
-    setCash("");
+    if (window.matchMedia("(min-width: 1021px)").matches)
+      searchRef.current?.focus();
   }
   async function checkout() {
     if (saving || !cart.length) return;
     setSaving(true);
     try {
+      if (paymentError) throw new Error(paymentError);
+      if (!purchase)
+        for (const l of cart) {
+          const p = s.products.find((p) => p.id === l.variant_id);
+          if (
+            !p ||
+            l.quantity > available(p) ||
+            (l.unit_id &&
+              !s.units.some((u) => u.id === l.unit_id && selectable(u)))
+          )
+            throw new Error(
+              "Hàng trong phiếu không còn đủ khả dụng. Kiểm tra lại kho và phiếu.",
+            );
+        }
       if (!purchase && useGrant) {
         if (discount || bankPaid || party)
           throw new Error(
@@ -147,10 +306,6 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
         a.modal("offline_receipt", r);
       } else {
         if (!online) throw new Error("Máy này chưa có quyền bán offline.");
-        if (cashOnly)
-          throw new Error(
-            "Hãy cấp quyền và hàng cho quầy trong mục Quầy offline trước.",
-          );
         const payments = [
           { method: "CASH", amount: cashPaid },
           { method: "BANK", amount: bankPaid },
@@ -173,6 +328,11 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
       setBank("0");
       setDiscount(0);
       setNote("");
+      setParty("");
+      setFreight(0);
+      chooseMethod("CASH");
+      setRestored(false);
+      setMobileStep("catalog");
     } catch (e) {
       a.notify((e as Error).message, true);
     } finally {
@@ -181,6 +341,10 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
   }
   function scan() {
     const value = query.trim();
+    if (!value) {
+      searchRef.current?.focus();
+      return;
+    }
     const unit = s.units.find(
         (u) => u.identifier === value || u.imei2 === value,
       ),
@@ -190,11 +354,13 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
             (p) =>
               p.sku.toLowerCase() === value.toLowerCase() ||
               p.barcode === value,
-          );
+          ) || (products.length === 1 ? products[0] : undefined);
     if (p) {
       if (unit) add(p, unit);
-      else p.mode === "QUANTITY" ? add(p) : setPick(p);
+      else openProduct(p);
       setQuery("");
+      if (window.matchMedia("(max-width:1020px)").matches)
+        searchRef.current?.blur();
     } else
       a.notify(
         "Không tìm thấy SKU, IMEI hoặc Serial. Bạn có thể tìm theo tên.",
@@ -202,7 +368,7 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
       );
   }
   return (
-    <>
+    <div className="pos-page" data-step={mobileStep}>
       <PageHeading
         title={purchase ? "Nhập hàng" : "Bán hàng"}
         description={
@@ -221,6 +387,32 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
           </Button>
         )}
       </PageHeading>
+      {!draftSaved && (
+        <div className="notice amber">
+          Chưa lưu được phiếu nháp trên máy. Giữ tab này mở cho đến khi hoàn
+          tất.
+        </div>
+      )}
+      {restored && (
+        <div className="pos-draft" role="status">
+          <span>Đã khôi phục phiếu nháp · {count} sản phẩm</span>
+          <button onClick={() => setRestored(false)}>Ẩn</button>
+        </div>
+      )}
+      <nav className="pos-mobile-tabs" aria-label="Các bước lập phiếu">
+        <button
+          aria-current={mobileStep === "catalog" ? "step" : undefined}
+          onClick={() => review("catalog")}
+        >
+          1. Chọn hàng
+        </button>
+        <button
+          aria-current={mobileStep === "checkout" ? "step" : undefined}
+          onClick={() => review("checkout")}
+        >
+          2. Phiếu & thanh toán <b>{count}</b>
+        </button>
+      </nav>
       {useGrant && (
         <div className="notice green">
           <span>
@@ -244,12 +436,18 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
             <div className="search-box">
               <Search size={18} />
               <input
-                aria-label="Tìm sản phẩm để bán"
+                ref={searchRef}
+                type="search"
+                enterKeyHint="search"
+                autoComplete="off"
+                aria-label={
+                  purchase ? "Tìm sản phẩm để nhập" : "Tìm sản phẩm để bán"
+                }
                 placeholder="Tìm tên, SKU, IMEI / Serial…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") scan();
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) scan();
                 }}
               />
               <kbd>↵</kbd>
@@ -272,9 +470,9 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
           <div className="product-grid">
             {products.map((p) => (
               <button
-                className="product-card"
+                className={`product-card ${cart.some((l) => l.variant_id === p.id) ? "selected" : ""}`}
                 key={p.id}
-                onClick={() => (p.mode === "QUANTITY" ? add(p) : setPick(p))}
+                onClick={() => openProduct(p)}
               >
                 <div className="product-picture">
                   <ProductArt product={p} />
@@ -298,6 +496,9 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
                     )}
                   </b>
                   <small className={available(p) ? "" : "danger-text"}>
+                    {cart.some((l) => l.variant_id === p.id)
+                      ? `Đã chọn ${cart.filter((l) => l.variant_id === p.id).reduce((n, l) => n + l.quantity, 0)} · `
+                      : ""}
                     Còn {available(p)}
                   </small>
                 </div>
@@ -337,25 +538,30 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
             )}
           </div>
           <div className="cart-party">
-            <select
-              aria-label={purchase ? "Nhà cung cấp" : "Khách hàng"}
-              value={party}
-              onChange={(e) => setParty(e.target.value)}
+            <button
+              className="party-select"
               disabled={useGrant}
+              onClick={() => {
+                setPartyQuery("");
+                setPartyPicker(true);
+              }}
+              aria-label={purchase ? "Chọn nhà cung cấp" : "Chọn khách hàng"}
             >
-              <option value="">
-                {purchase ? "Chọn nhà cung cấp" : "Khách lẻ · thanh toán đủ"}
-              </option>
-              {s.parties
-                .filter((p) =>
-                  purchase ? p.type !== "CUSTOMER" : p.type !== "SUPPLIER",
-                )
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} {p.phone && `· ${p.phone}`}
-                  </option>
-                ))}
-            </select>
+              <Users size={18} />
+              <span>
+                <strong>
+                  {selectedParty?.name ||
+                    (purchase ? "Chọn nhà cung cấp" : "Khách lẻ")}
+                </strong>
+                <small>
+                  {selectedParty?.phone ||
+                    (purchase
+                      ? "Tìm theo tên hoặc số điện thoại"
+                      : "Chạm để tìm khách / ghi nợ")}
+                </small>
+              </span>
+              <Search size={16} />
+            </button>
             <button
               className="icon-btn"
               title="Thêm đối tác"
@@ -392,6 +598,7 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
                     <div className="cart-item-controls">
                       <div className="stepper">
                         <button
+                          aria-label={`Giảm số lượng ${p.name}`}
                           disabled={l.quantity <= 1 || p.mode !== "QUANTITY"}
                           onClick={() =>
                             setCart(
@@ -405,9 +612,27 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
                         >
                           <Minus size={13} />
                         </button>
-                        <span>{l.quantity}</span>
-                        <button
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          aria-label={`Số lượng ${p.name}`}
+                          min="1"
+                          value={l.quantity || ""}
                           disabled={p.mode !== "QUANTITY"}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) =>
+                            quantityAt(i, Number(e.target.value))
+                          }
+                          onBlur={() => {
+                            if (!l.quantity) quantityAt(i, 1);
+                          }}
+                        />
+                        <button
+                          aria-label={`Tăng số lượng ${p.name}`}
+                          disabled={
+                            p.mode !== "QUANTITY" ||
+                            (!purchase && l.quantity >= available(p))
+                          }
                           onClick={() =>
                             setCart(
                               cart.map((x, n) =>
@@ -421,24 +646,23 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
                           <Plus size={13} />
                         </button>
                       </div>
-                      <input
-                        className="price-input"
-                        aria-label={`Đơn giá ${p.name}`}
-                        type="number"
-                        min="0"
-                        step="1000"
-                        value={l.price}
-                        disabled={useGrant}
-                        onChange={(e) =>
-                          setCart(
-                            cart.map((x, n) =>
-                              n === i
-                                ? { ...x, price: Number(e.target.value) }
-                                : x,
-                            ),
-                          )
-                        }
-                      />
+                      <label className="line-price">
+                        <span>Đơn giá</span>
+                        <MoneyInput
+                          className="price-input"
+                          aria-label={`Đơn giá ${p.name}`}
+                          required
+                          value={l.price}
+                          disabled={useGrant}
+                          onChange={(value) =>
+                            setCart(
+                              cart.map((x, n) =>
+                                n === i ? { ...x, price: value } : x,
+                              ),
+                            )
+                          }
+                        />
+                      </label>
                     </div>
                   </div>
                 );
@@ -454,34 +678,32 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
             <div className="summary-row">
               <span>Tiền hàng</span>
               <b>
-                {money(
-                  cart.reduce(
-                    (a, l) => a + l.quantity * l.price - l.discount,
-                    0,
-                  ),
-                )}
+                {totals.error
+                  ? "—"
+                  : money(
+                      cart.reduce(
+                        (a, l) => a + l.quantity * l.price - l.discount,
+                        0,
+                      ),
+                    )}
               </b>
             </div>
             <div className="summary-row">
               <label htmlFor="invoice-discount">Giảm giá hóa đơn</label>
-              <input
+              <MoneyInput
                 id="invoice-discount"
-                type="number"
-                min="0"
                 value={discount}
                 disabled={useGrant}
-                onChange={(e) => setDiscount(Number(e.target.value))}
+                onChange={setDiscount}
               />
             </div>
             {purchase && (
               <div className="summary-row">
                 <label htmlFor="freight">Chi phí nhập trả riêng</label>
-                <input
+                <MoneyInput
                   id="freight"
-                  type="number"
-                  min="0"
                   value={freight}
-                  onChange={(e) => setFreight(Number(e.target.value))}
+                  onChange={setFreight}
                 />
               </div>
             )}
@@ -489,24 +711,97 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
               <span>Tổng thanh toán</span>
               <b>{money(amount)}</b>
             </div>
-            <div className="two-cols">
-              <Field label="Tiền mặt thực thu / chi">
-                <input
-                  type="number"
-                  min="0"
-                  value={cash === "" ? amount : cash}
-                  onChange={(e) => setCash(e.target.value)}
-                />
-              </Field>
-              <Field label="Chuyển khoản đã kiểm tra">
-                <input
-                  type="number"
-                  min="0"
-                  value={bank}
-                  disabled={useGrant}
-                  onChange={(e) => setBank(e.target.value)}
-                />
-              </Field>
+            {!useGrant && (
+              <div
+                className="payment-methods"
+                role="group"
+                aria-label="Phương thức thanh toán"
+              >
+                {(
+                  [
+                    ["CASH", "Tiền mặt"],
+                    ["BANK", "Chuyển khoản"],
+                    ["SPLIT", "Kết hợp"],
+                    ["CREDIT", "Ghi nợ"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    aria-pressed={method === key}
+                    onClick={() => {
+                      if (method !== key) chooseMethod(key);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div
+              className={
+                method === "SPLIT" && !useGrant
+                  ? "two-cols payment-inputs"
+                  : "payment-inputs"
+              }
+            >
+              {(useGrant || method !== "BANK") && (
+                <Field
+                  label={
+                    useGrant
+                      ? "Tiền khách đưa"
+                      : method === "CREDIT"
+                        ? "Tiền mặt trả trước"
+                        : "Tiền mặt thanh toán"
+                  }
+                >
+                  <MoneyInput
+                    aria-label={
+                      useGrant
+                        ? "Tiền khách đưa"
+                        : method === "CREDIT"
+                          ? "Tiền mặt trả trước"
+                          : "Tiền mặt thanh toán"
+                    }
+                    value={cashPaid}
+                    onChange={(value) => setCash(String(value))}
+                  />
+                  {method !== "CREDIT" && (
+                    <button
+                      className="amount-shortcut"
+                      disabled={!Number.isFinite(bankPaid)}
+                      onClick={() => setCash("")}
+                    >
+                      Điền đủ{" "}
+                      {Number.isFinite(bankPaid)
+                        ? money(Math.max(0, amount - bankPaid))
+                        : "tiền mặt"}
+                    </button>
+                  )}
+                </Field>
+              )}
+              {!useGrant && ["BANK", "SPLIT"].includes(method) && (
+                <Field label="Chuyển khoản đã kiểm tra">
+                  <MoneyInput
+                    aria-label="Chuyển khoản đã kiểm tra"
+                    value={bankPaid}
+                    onChange={(value) => setBank(String(value))}
+                  />
+                  <button
+                    className="amount-shortcut"
+                    onClick={() => {
+                      setBank("");
+                      if (method === "SPLIT")
+                        setBank(
+                          String(
+                            Math.max(0, amount - (cash === "" ? 0 : cashPaid)),
+                          ),
+                        );
+                    }}
+                  >
+                    Điền số tiền còn lại
+                  </button>
+                </Field>
+              )}
             </div>
             <div className="summary-row">
               <span>
@@ -517,22 +812,41 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
               <b
                 className={amount - cashPaid - bankPaid > 0 ? "amber-text" : ""}
               >
-                {money(
-                  useGrant && cashPaid > amount
-                    ? cashPaid - amount
-                    : Math.max(0, amount - cashPaid - bankPaid),
-                )}
+                {!Number.isFinite(cashPaid + bankPaid)
+                  ? "—"
+                  : money(
+                      useGrant && cashPaid > amount
+                        ? cashPaid - amount
+                        : Math.max(0, amount - cashPaid - bankPaid),
+                    )}
               </b>
             </div>
             <input
               className="cart-note"
+              aria-label="Ghi chú giao dịch"
               placeholder="Ghi chú giao dịch (nếu có)"
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
+            {cart.length > 0 && paymentError && (
+              <div className="pos-error" role="status">
+                {paymentError}
+                {!party && (purchase || cashPaid + bankPaid < amount) && (
+                  <button
+                    onClick={() => {
+                      setPartyQuery("");
+                      setPartyPicker(true);
+                    }}
+                  >
+                    Chọn {purchase ? "nhà cung cấp" : "khách hàng"}
+                  </button>
+                )}
+              </div>
+            )}
             <Button
+              variant="cart-submit"
               onClick={() => void checkout()}
-              disabled={!cart.length || saving || a.busy}
+              disabled={!cart.length || saving || a.busy || !!paymentError}
             >
               <ShoppingBag size={18} />
               {saving
@@ -549,10 +863,142 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
                 : purchase
                   ? "Ghi nhận kho, giá vốn và công nợ cùng lúc."
                   : "Chỉ ghi sổ sau khi hệ thống xác nhận thành công."}
+              {draftSaved &&
+                " Nháp được giữ trong tab này khi chuyển màn / tải lại."}
             </small>
           </div>
         </aside>
       </div>
+      <div className="pos-mobile-bar">
+        <div>
+          <small>
+            {mobileStep === "catalog"
+              ? `${count} sản phẩm đã chọn`
+              : useGrant
+                ? "Tiền mặt tại quầy"
+                : {
+                    CASH: "Tiền mặt",
+                    BANK: "Chuyển khoản",
+                    SPLIT: "Tiền mặt + chuyển khoản",
+                    CREDIT: "Thanh toán / ghi nợ",
+                  }[method]}
+          </small>
+          <strong aria-live="polite">
+            {totals.error ? "Kiểm tra phiếu" : money(amount)}
+          </strong>
+        </div>
+        <button
+          className="btn"
+          disabled={
+            !cart.length ||
+            saving ||
+            a.busy ||
+            (mobileStep === "checkout" && !!paymentError)
+          }
+          onClick={() =>
+            mobileStep === "catalog" ? review("checkout") : void checkout()
+          }
+        >
+          {mobileStep === "catalog" ? (
+            <>
+              Xem phiếu <ArrowRight size={18} />
+            </>
+          ) : saving ? (
+            "Đang lưu…"
+          ) : useGrant ? (
+            "Lưu tại quầy"
+          ) : purchase ? (
+            "Ghi nhận nhập"
+          ) : (
+            "Xác nhận bán"
+          )}
+        </button>
+      </div>
+      {partyPicker && (
+        <Modal
+          title={purchase ? "Chọn nhà cung cấp" : "Chọn khách hàng"}
+          subtitle="Tìm theo tên hoặc số điện thoại"
+          onClose={() => setPartyPicker(false)}
+        >
+          <div className="party-search search-box">
+            <Search size={18} />
+            <input
+              type="search"
+              autoFocus
+              aria-label="Tìm đối tác trong phiếu"
+              value={partyQuery}
+              onChange={(e) => setPartyQuery(e.target.value)}
+              placeholder="Nhập tên hoặc số điện thoại…"
+              enterKeyHint="search"
+              onKeyDown={(e) => {
+                if (
+                  e.key === "Enter" &&
+                  !e.nativeEvent.isComposing &&
+                  partyOptions.length === 1
+                ) {
+                  setParty(partyOptions[0].id);
+                  setPartyPicker(false);
+                }
+              }}
+            />
+          </div>
+          <div className="party-results">
+            {!purchase && (
+              <button
+                onClick={() => {
+                  setParty("");
+                  setPartyPicker(false);
+                }}
+              >
+                <span>
+                  <strong>Khách lẻ</strong>
+                  <small>Không ghi công nợ</small>
+                </span>
+                {!party && <Check size={18} />}
+              </button>
+            )}
+            {partyOptions.slice(0, 50).map((p) => (
+              <button
+                key={p.id}
+                onClick={() => {
+                  setParty(p.id);
+                  setPartyPicker(false);
+                }}
+              >
+                <span>
+                  <strong>{p.name}</strong>
+                  <small>{p.phone || "Chưa có số điện thoại"}</small>
+                </span>
+                {p.id === party ? (
+                  <Check size={18} />
+                ) : (
+                  <ArrowRight size={16} />
+                )}
+              </button>
+            ))}
+            {!partyOptions.length && (
+              <Empty
+                title="Chưa tìm thấy đối tác"
+                detail="Thử tên hoặc số điện thoại khác."
+              />
+            )}
+          </div>
+          {partyOptions.length > 50 && (
+            <p className="pos-helper">
+              Nhập thêm để thu hẹp {partyOptions.length} kết quả.
+            </p>
+          )}
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setPartyPicker(false);
+              a.modal("party", purchase ? "SUPPLIER" : "CUSTOMER");
+            }}
+          >
+            Thêm {purchase ? "nhà cung cấp" : "khách hàng"}
+          </Button>
+        </Modal>
+      )}
       {pick && (
         <Modal
           title={purchase ? "Nhập thông tin thiết bị" : "Chọn thiết bị cụ thể"}
@@ -564,25 +1010,64 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 const f = new FormData(e.currentTarget);
+                const identifier = String(f.get("identifier") || "").trim(),
+                  imei2 = String(f.get("imei2") || "").trim();
+                if (
+                  pick.mode === "IMEI" &&
+                  (!isImei(identifier) || (imei2 && !isImei(imei2)))
+                ) {
+                  setEntryError(
+                    "IMEI cần đúng 15 chữ số và mã kiểm tra. Kiểm tra lại tem máy.",
+                  );
+                  return;
+                }
+                if (imei2 === identifier && imei2) {
+                  setEntryError("IMEI 1 và IMEI 2 không được trùng nhau.");
+                  return;
+                }
+                try {
+                  integer(purchaseCost, "Giá nhập");
+                } catch (e) {
+                  setEntryError((e as Error).message);
+                  return;
+                }
                 add(pick, undefined, {
-                  identifier: String(f.get("identifier")),
-                  imei2: String(f.get("imei2") || ""),
-                  price: Number(f.get("cost")),
+                  identifier,
+                  imei2,
+                  price: purchaseCost,
                   condition: String(f.get("condition")),
                 });
               }}
             >
               <Field label={pick.mode === "IMEI" ? "IMEI 1" : "Serial"}>
-                <input name="identifier" required autoFocus />
+                <input
+                  name="identifier"
+                  required
+                  autoFocus
+                  inputMode={pick.mode === "IMEI" ? "numeric" : "text"}
+                  maxLength={pick.mode === "IMEI" ? 15 : 100}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
               </Field>
               {pick.mode === "IMEI" && (
                 <Field label="IMEI 2 (nếu có)">
-                  <input name="imei2" />
+                  <input
+                    name="imei2"
+                    inputMode="numeric"
+                    maxLength={15}
+                    autoComplete="off"
+                  />
                 </Field>
               )}
               <div className="two-cols">
                 <Field label="Giá nhập">
-                  <input type="number" name="cost" min="0" required />
+                  <MoneyInput
+                    name="cost"
+                    value={purchaseCost}
+                    onChange={setPurchaseCost}
+                    required
+                  />
                 </Field>
                 <Field label="Tình trạng">
                   <select name="condition">
@@ -591,7 +1076,14 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
                   </select>
                 </Field>
               </div>
-              <Button type="submit">Thêm vào phiếu</Button>
+              {entryError && (
+                <div className="pos-error" role="alert">
+                  {entryError}
+                </div>
+              )}
+              <Button type="submit" disabled={!Number.isFinite(purchaseCost)}>
+                Thêm vào phiếu
+              </Button>
             </form>
           ) : (
             <div className="unit-picker">
@@ -599,12 +1091,8 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
                 .filter(
                   (u) =>
                     u.variant_id === pick.id &&
-                    u.status ===
-                      (useGrant ? "OFFLINE_RESERVED" : "AVAILABLE") &&
-                    (!useGrant ||
-                      grant!.lines.some(
-                        (l) => l.unit_id === u.id && l.quantity > l.consumed,
-                      )),
+                    selectable(u) &&
+                    !cart.some((l) => l.unit_id === u.id),
                 )
                 .map((u) => (
                   <button key={u.id} onClick={() => add(pick, u)}>
@@ -623,7 +1111,7 @@ export default function Sales({ purchase = false }: { purchase?: boolean }) {
           )}
         </Modal>
       )}
-    </>
+    </div>
   );
 }
 function XIcon() {

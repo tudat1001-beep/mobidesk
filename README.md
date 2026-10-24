@@ -35,6 +35,14 @@ URL và publishable/anon key là cấu hình công khai của frontend. Không n
 
 Khi sao chép mã nguồn cho một khách mới, dùng project/đích hosting mới của khách đó; `.openai/hosting.json` trong checkout này là định danh bản demo hiện tại, không dùng để ghi đè khách khác. Không đưa dữ liệu khách, `.env`, khóa đặc quyền hoặc bản sao quầy vào Git.
 
+## Bán hàng trên điện thoại
+
+Màn hình Bán hàng / Nhập hàng có hai bước trên màn hình hẹp: **Chọn hàng** và **Phiếu & thanh toán**. Tổng tiền và nút xem/xác nhận phiếu nằm ở cuối màn hình. Có thể sửa số lượng trực tiếp và sửa đơn giá bằng bàn phím số; ô tiền hiển thị dấu chấm phân cách hàng nghìn, nhận `149000` hoặc `149.000` và chặn số âm/số thập phân.
+
+Chọn **Tiền mặt**, **Chuyển khoản**, **Kết hợp** hoặc **Ghi nợ** để điền nhanh. Chuyển khoản mặc định điền đủ tiền hàng; kết hợp tự lấy phần còn lại làm tiền mặt, vẫn có thể sửa số tiền thực thu/chi. Quầy đã cấp quyền offline chỉ dùng tiền mặt theo quy tắc đã cấp. Phần công nợ yêu cầu chọn khách hàng; nút chọn khách có tìm theo tên/số điện thoại.
+
+Phiếu nháp tự giữ trong **tab trình duyệt hiện tại**, tách theo Supabase project/cửa hàng/tài khoản và bán/nhập. Chuyển trang hoặc tải lại trong tab đó sẽ khôi phục nháp; lập phiếu thành công sẽ xóa giỏ nháp. Đây chưa phải chứng từ đã ghi sổ và không phải bản sao lưu; không dựa vào nháp để khôi phục sau khi đóng tab/xóa trình duyệt. Đơn giá đã sửa vẫn được giữ khi khôi phục, nhưng tồn khả dụng được kiểm tra lại lúc bán.
+
 ## Vận hành quầy offline
 
 1. Trên đúng máy quầy, mở bản production khi còn mạng, đăng nhập và vào **Quầy offline**. Chờ trạng thái bộ nhớ PWA; thử mất mạng/mở lại trên chính máy và trình duyệt sẽ dùng. Trình duyệt nhúng có thể không hỗ trợ đầy đủ PWA; máy quầy nên dùng Chrome/Edge với hồ sơ trình duyệt được giữ cố định.

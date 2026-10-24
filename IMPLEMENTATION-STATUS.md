@@ -22,7 +22,7 @@ So với mô hình logic trong PLAN, database gộp các đầu chứng từ và
 
 ## Bằng chứng kiểm tra hiện có
 
-- `npm test`: **21 kiểm thử, 4 tệp đều qua**. SQL migrations được thực thi trên PGlite (PostgreSQL nhúng), với mô phỏng Auth uid/roles.
+- `npm test`: **25 kiểm thử, 5 tệp đều qua**. SQL migrations được thực thi trên PGlite (PostgreSQL nhúng), với mô phỏng Auth uid/roles.
 - Kiểm thử bao gồm vốn bình quân và vốn đích danh, rollback khi thiếu tồn/IMEI trùng, trả giá vốn gốc, công nợ/hoàn, cùng request không ghi trùng, khác nội dung bị chặn, phân quyền giá vốn/bảng private, grant/consume/release, đầu kỳ, FK khác cửa hàng, đổi hàng rollback/bù trừ, báo cáo toàn sổ và lịch sử theo quyền, mã vạch duy nhất và giá lịch sử.
 - fake-indexeddb: hai lượt bán tranh phần tồn cuối chỉ một thành công; cập nhật ACK không làm mất phiếu khác; chặn grant/sequence hồi lùi; seed demo bền vững trước khi cấp ID.
 - Cấu hình: chỉ URL Supabase HTTPS và khóa công khai; từ chối khóa đặc quyền; kiểm tra khóa màn hình cài đặt không lưu mật khẩu thô.
@@ -36,8 +36,17 @@ So với mô hình logic trong PLAN, database gộp các đầu chứng từ và
 - Chưa xác minh in trên máy in giấy thật, khổ giấy/lề/cắt giấy. Hỗ trợ hộp thoại in trình duyệt; không có driver in thẳng.
 - Đã sửa khởi tạo SW sau top-level await và cache miss do `Vary: Origin`. Sau sửa, đã dừng máy chủ local, reload được giao diện từ cache và lưu phiếu quầy thứ hai. Đây là kiểm tra shell + IndexedDB demo; vẫn cần thử mất Internet/khởi động lại và đồng bộ Supabase thật trên Chrome/Edge của máy quầy.
 - Chưa có nhập bản sao quầy tự động, quy trình xử lý mất máy/clone browser, grant có chữ ký và ràng buộc phần cứng. Cần quy trình đối soát ngoại lệ và diễn tập khôi phục cả database/Auth trước go-live.
-- Chưa có lưu giỏ nháp khi chuyển màn/tải lại, quét camera, ảnh sản phẩm, bảng giá nhập tham khảo riêng, import Excel hàng loạt, luồng hoàn tất email đặt lại mật khẩu, hóa đơn điện tử/VAT hoặc thu cũ đổi mới chuyên sâu.
+- Đã có lưu giỏ nháp trong tab khi chuyển màn/tải lại, tách theo project/cửa hàng/user/bán-nhập. Chưa có nháp dùng chung nhiều tab/máy, quét camera, ảnh sản phẩm, bảng giá nhập tham khảo riêng, import Excel hàng loạt, luồng hoàn tất email đặt lại mật khẩu, hóa đơn điện tử/VAT hoặc thu cũ đổi mới chuyên sâu.
 - Báo cáo tổng hợp lấy toàn sổ, nhưng CSV chi tiết/biến động và lịch sử tại trang đối tác/thiết bị dựa trên snapshot gần nhất; dùng trang Lịch sử để tra cứu chứng từ cũ. Chưa có xuất toàn bộ sổ phân trang.
 - Các chính sách giá vốn, trả/đổi, bảo hành và giá/thuế là quy tắc của bản thử chờ chủ duyệt, chưa tự trở thành chính sách của khách.
 
 Chỉ chuyển sang vận hành sau khi hoàn thành cài đặt khách, duyệt chính sách, kiểm thử offline/in và backup/restore thực tế theo PLAN. Không dùng chung dữ liệu hoặc thông tin đăng nhập quản trị Supabase giữa các khách.
+
+## Cải thiện nhập liệu và phone — 24/10/2026
+
+- POS trên màn hình hẹp tách chọn hàng / phiếu và thanh toán; danh sách sản phẩm gọn hơn, nút chạm lớn, ô nhập 16px và thanh tổng tiền cố định có chừa thanh điều hướng/vùng an toàn.
+- Ô tiền nhận VND nguyên và nhóm nghìn chuẩn; chọn toàn bộ khi sửa, bàn phím số; không diễn giải số thập phân hoặc âm thành số tiền khác.
+- Tiền mặt/chuyển khoản/kết hợp/ghi nợ có nút chọn nhanh; thanh toán kết hợp tự tính phần tiền mặt còn lại. Nhấn lại phương thức đang chọn không xóa số tiền đã nhập. Chặn vượt thanh toán và yêu cầu đối tác trước khi ghi nợ.
+- Tìm sản phẩm không dấu, SKU/mã vạch hoặc IMEI/Serial; Enter thêm kết quả duy nhất. Số lượng sửa trực tiếp, có giới hạn theo tồn hiện tại; máy/Serial đã chọn hoặc đã bán không được chọn tiếp.
+- Chọn đối tác bằng danh sách tìm tên/điện thoại; biểu mẫu mobile mở dạng sheet, nháp lưu riêng trong tab. Giữ nguyên kiểm tra kho/quyền/idempotency trên server.
+- Kiểm thử bổ sung: định dạng tiền, phần tiền mặt còn lại và chuyển khoản đủ tự cập nhật theo tổng; khôi phục nháp và từ chối dữ liệu nháp hỏng. Kiểm tra giao diện tại 320px/390px và desktop; bàn phím vật lý/ảo, Safari và máy in thật vẫn cần nghiệm thu trên thiết bị thực.
